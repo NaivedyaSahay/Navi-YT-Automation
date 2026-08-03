@@ -1,0 +1,18 @@
+# Sensitive credentials & keys
+.env
+client_secrets.json
+token.json
+
+# Output directories & generated assets
+output/
+*.mp4
+*.mp3
+
+# Python cache & virtual environments
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.idea/
+.vscode/
