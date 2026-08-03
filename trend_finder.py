@@ -27,9 +27,16 @@ logger = logging.getLogger("trend_finder")
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 REDDIT_SUBS = [
-    "india", "IndiaTech", "technology", "science", "philosophy",
-    "Futurology", "space", "psychology", "history",
-    "explainlikeimfive", "todayilearned", "interestingasfuck",
+    # Facts & Curiosity
+    "todayilearned", "interestingasfuck", "explainlikeimfive", "Showerthoughts",
+    # Tech & Space
+    "technology", "space", "Futurology", "IndiaTech",
+    # Oceans & Biology / Human Body
+    "ocean", "biology",
+    # Movies & Cinema
+    "MovieDetails", "CinemaDetails", "history",
+    # Psychology & Motivation
+    "psychology", "decidingtobetter", "getdisciplined", "motivation",
 ]
 
 BAD_KEYWORDS = [
@@ -63,21 +70,35 @@ BAD_PATTERNS = [
 ]
 
 GOOD_PATTERNS = [
-    r"\b(why|how|what|when|the|science|world|life|mind|ai|space|history|future|truth|secret|power|success|health|psychology|facts|mystery|hidden|proven|reason|surprising)\b",
+    r"\b(why|how|what|when|facts|fact|tech|technology|space|ocean|oceans|movie|movies|film|cinema|body|brain|human|psychology|mind|mindset|motivation|story|stories|history|secret|secrets|mystery|mysteries|science|future|truth|proven|lesson|lessons|success)\b",
 ]
 
-# Fallback topics if all sources fail — always good for Shorts
+# Fallback topics across Tech, Space, Oceans, Movies, Human Body, Psychology, Motivation & Stories
 EVERGREEN_TOPICS = [
-    "The most mind-blowing facts about the universe",
-    "Why your brain lies to you every day",
-    "The psychology of success nobody talks about",
-    "Ancient secrets that changed the world",
-    "How artificial intelligence will change your life",
-    "The science behind why we dream",
-    "Habits of the world's most successful people",
-    "The hidden power of stoicism",
-    "Why most people never achieve their goals",
-    "The most fascinating unsolved mysteries in science",
+    # Tech & AI
+    "Mind-blowing artificial intelligence facts that sound like sci-fi",
+    "How quantum computers will completely change the future of technology",
+    # Space & Universe
+    "Unbelievable space facts that will expand your mind",
+    "The terrifying mystery of supermassive black holes in deep space",
+    # Oceans & Deep Sea
+    "Mysterious deep ocean creatures humans barely know exist",
+    "What lies at the bottom of the Mariana Trench?",
+    # Movies & Cinema
+    "Hidden movie details and secret facts you completely missed",
+    "Crazy behind-the-scenes cinema facts that changed movie history",
+    # Human Body & Health
+    "Crazy facts about the human body you were never taught in school",
+    "How your brain processes memories while you sleep",
+    # Psychology & Mindset
+    "Powerful psychological tricks that explain human behavior",
+    "Why your brain falls for cognitive illusions every single day",
+    # Motivation & Personal Growth
+    "The 1% mindset rule that transforms your discipline and life",
+    "Lessons from stoicism that help you master emotional control",
+    # Incredible Stories & Mysteries
+    "Ancient historical secrets and unsolved mysteries science cannot explain",
+    "Unbelievable true stories of survival against all odds",
 ]
 
 
@@ -167,45 +188,93 @@ def _get_google_trends_rss(region: str = "IN", n: int = 15) -> list[dict]:
     return topics
 
 
-# ── Source 2: Google News RSS ─────────────────────────────────────────────────
+# ── Categorized Curiosity & Facts Library ────────────────────────────────────
 
-def _get_google_news_rss(n: int = 10) -> list[dict]:
-    """
-    Pull trending headlines from Google News RSS feed.
-    Great for factual / educational Shorts topics.
-    """
-    url     = "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
-    headers = {"User-Agent": "NaviBot/1.0 (YouTube Shorts Automation)"}
-    topics  = []
-    try:
-        resp = requests.get(url, headers=headers, timeout=12)
-        resp.raise_for_status()
-        root  = ET.fromstring(resp.content)
-        items = root.findall(".//item")
-        for item in items[:n * 2]:   # fetch extra, we'll filter
-            title_el = item.find("title")
-            title    = _clean(title_el.text or "") if title_el is not None else ""
-            # Strip publisher suffix " - CNN" etc.
-            title = re.sub(r"\s+-\s+\S+.*$", "", title).strip()
-            if _is_suitable(title):
-                bonus = 0.4 if _has_educational_value(title) else 0.0
-                topics.append({
-                    "topic":  title,
-                    "source": "Google News",
-                    "score":  1.4 + bonus,   # News gets high priority
-                })
-        logger.info("Google News RSS: found %d topics", len(topics))
-    except Exception as exc:
-        logger.warning("Google News RSS failed: %s", exc)
-    return topics[:n]
+CATEGORIZED_TOPICS = {
+    "Space & Universe": [
+        "What happens if you step inside a supermassive black hole?",
+        "Mind-blowing space facts about neutron stars that defy physics",
+        "The mysterious discoveries rewriting our understanding of space",
+        "How big is the observable universe compared to planet Earth?",
+        "Why space is completely silent and freezing cold",
+        "The terrifying concept of a rogue planet drifting through deep space",
+    ],
+    "Oceans & Deep Sea": [
+        "Creepy deep ocean creatures humans barely know exist",
+        "What lies at the bottom of the Mariana Trench 36,000 feet down?",
+        "Why 80% of the Earth's oceans remain completely unexplored",
+        "The bizarre bioluminescent creatures living in total ocean darkness",
+        "Fascinating facts about the immortal jellyfish that never dies",
+    ],
+    "Tech & Artificial Intelligence": [
+        "Mind-blowing AI advancements coming in the next 5 years",
+        "How quantum computers will completely change the future of tech",
+        "Crazy future technology concepts that already exist today",
+        "How microchips are manufactured at the sub-nanometer scale",
+        "The terrifying evolution of humanoid robotics",
+    ],
+    "Movies & Cinema Details": [
+        "Hidden movie details and secret Easter eggs you completely missed",
+        "Crazy behind-the-scenes cinema facts that changed movie history",
+        "How movie sound designers create terrifying alien and monster sounds",
+        "Mind-blowing movie props that were actually real objects",
+    ],
+    "Human Body & Brain": [
+        "Crazy human body facts you were never taught in biology class",
+        "How your brain rewires itself every single night while you sleep",
+        "Why your brain creates fake memories without you knowing",
+        "Fascinating biological superpowers of the human immune system",
+        "The science behind why goosebumps happen when listening to music",
+    ],
+    "Psychology & Human Behavior": [
+        "Powerful psychological tricks that explain human behavior",
+        "Why your brain falls for cognitive bias illusions every single day",
+        "The psychological reason why people procrastinate on important goals",
+        "How body language reveals what someone is secretly thinking",
+        "The Spotlight Effect: Why nobody is actually watching your mistakes",
+    ],
+    "Motivation & Mindset": [
+        "The 1% mindset rule that transforms your discipline and life",
+        "Lessons from ancient stoicism that build mental toughness",
+        "Why motivation is temporary but daily habits create success",
+        "How high performers train their focus and eliminate distractions",
+        "The psychological power of adopting a growth mindset",
+    ],
+    "Incredible Stories & Mysteries": [
+        "Ancient historical secrets and unsolved mysteries science cannot explain",
+        "Unbelievable true stories of human survival against impossible odds",
+        "The mysterious lost civilizations that vanished without a trace",
+        "Fascinating historical coincidences that sound completely fake",
+    ],
+}
 
 
-# ── Source 3: Reddit public JSON ──────────────────────────────────────────────
+def _get_curated_topics(n: int = 10) -> list[dict]:
+    """Pick diverse topics across all requested categories."""
+    import random
+    selected = []
+    categories = list(CATEGORIZED_TOPICS.keys())
+    random.shuffle(categories)
+
+    for cat in categories:
+        topics_list = CATEGORIZED_TOPICS[cat]
+        topic_text = random.choice(topics_list)
+        selected.append({
+            "topic": topic_text,
+            "source": f"Facts & Curiosity ({cat})",
+            "score": 1.8,
+        })
+        if len(selected) >= n:
+            break
+    return selected
+
+
+# ── Source: Reddit Curiosity & Facts ──────────────────────────────────────────
 
 def _get_reddit_trending(n: int = 15) -> list[dict]:
     """
-    Pull hot posts from educational subreddits via public JSON API.
-    No API key required.
+    Pull hot posts from educational and curiosity subreddits via public JSON API.
+    No news, no politics.
     """
     headers = {"User-Agent": "NaviBot/1.0 (YouTube Shorts Automation)"}
     topics  = []
@@ -231,47 +300,37 @@ def _get_reddit_trending(n: int = 15) -> list[dict]:
                         "score":  min(score / 10000, 1.0) + bonus,
                     })
 
-            time.sleep(0.4)   # be polite
+            time.sleep(0.3)
         except Exception as exc:
             logger.debug("Reddit r/%s failed: %s", sub, exc)
 
     topics.sort(key=lambda x: x["score"], reverse=True)
-    logger.info("Reddit: found %d topics (before dedup)", len(topics))
+    logger.info("Reddit: found %d curiosity topics", len(topics))
     return topics[:n]
-
-
-# ── Fallback: evergreen topics ────────────────────────────────────────────────
-
-def _get_evergreen(n: int = 5) -> list[dict]:
-    import random
-    chosen = random.sample(EVERGREEN_TOPICS, min(n, len(EVERGREEN_TOPICS)))
-    return [{"topic": t, "source": "Evergreen", "score": 0.5} for t in chosen]
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def get_trending_topics(n: int = 5, region: str = "IN") -> list[dict]:
     """
-    Fetch and rank trending topics from Google Trends + Google News + Reddit.
-    Falls back to evergreen topics if all live sources fail.
+    Fetch curiosity, facts, psychology, space, oceans, movies, motivation,
+    and story topics. Zero news channels or political content.
 
     Returns list of up to *n* dicts: {"topic", "source", "score"}
     """
-    logger.info("Fetching trends (region=%s)…", region)
+    logger.info("Discovering facts, curiosity & educational topics…")
 
-    trends = _get_google_trends_rss(region=region, n=15)
-    news   = _get_google_news_rss(n=10)
-    reddit = _get_reddit_trending(n=20)
+    reddit = _get_reddit_trending(n=10)
+    curated = _get_curated_topics(n=10)
 
-    combined = trends + news + reddit
+    combined = reddit + curated
     combined.sort(key=lambda x: x["score"], reverse=True)
     result = _dedupe(combined, n)
 
     if not result:
-        logger.warning("All live sources failed — using evergreen fallback topics.")
-        result = _get_evergreen(n)
+        result = _get_curated_topics(n)
 
-    logger.info("Top %d topics selected:", len(result))
+    logger.info("Top %d curiosity topics selected:", len(result))
     for i, t in enumerate(result, 1):
         logger.info("  %d. [%s] %s", i, t["source"], t["topic"])
 
