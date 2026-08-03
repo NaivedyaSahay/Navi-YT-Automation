@@ -239,8 +239,30 @@ def run_pipeline(
     logger.info("Pipeline finished in %.1f s.", elapsed)
 
 
+HISTORY_FILE = Path("posted_topics.json")
+
+def _load_history() -> list[str]:
+    if HISTORY_FILE.exists():
+        try:
+            import json
+            return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+    return []
+
+def _save_history(topic: str) -> None:
+    history = _load_history()
+    history.append(topic)
+    history = history[-100:]  # Keep last 100
+    try:
+        import json
+        HISTORY_FILE.write_text(json.dumps(history, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.warning("Could not save topic history: %s", exc)
+
+
 def _discover_topic(region: str) -> str:
-    """Fetch trending topics and return the best one."""
+    """Fetch trending topics and return a fresh, unposted topic."""
     print("\n🔍 Discovering trending topics…\n")
     try:
         topics = trend_finder.get_trending_topics(n=config.TREND_N, region=region)
@@ -259,8 +281,18 @@ def _discover_topic(region: str) -> str:
         print(f"     └─ Source: {t['source']}")
     print("  " + "-" * 50)
 
-    chosen = topics[0]
-    print(f"\n✅ Auto-selected: \"{chosen['topic']}\" [{chosen['source']}]\n")
+    import random
+    history = set(t.lower() for t in _load_history())
+    fresh_topics = [t for t in topics if t["topic"].lower() not in history]
+
+    if not fresh_topics:
+        logger.info("All top trending topics were recently used. Selecting a random topic for variety.")
+        fresh_topics = topics
+
+    chosen = random.choice(fresh_topics)
+    _save_history(chosen["topic"])
+
+    print(f"\n✅ Auto-selected fresh topic: \"{chosen['topic']}\" [{chosen['source']}]\n")
     return chosen["topic"]
 
 
