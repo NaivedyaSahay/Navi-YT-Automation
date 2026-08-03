@@ -51,18 +51,23 @@ PALETTES = [
 # ── Font helpers ──────────────────────────────────────────────────────────────
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    # Impact is the #1 viral Shorts font — punchy and easy to read
+    project_dir = Path(__file__).parent
     candidates = [
+        # 1. Bundled project fonts (Cross-platform)
+        project_dir / "fonts" / "Impact.ttf",
+        project_dir / "fonts" / "ArialBold.ttf",
+        # 2. Windows system fonts
         "C:/Windows/Fonts/impact.ttf",
         "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/ariblk.ttf",   # Arial Black
-        "C:/Windows/Fonts/calibrib.ttf" if bold else "C:/Windows/Fonts/calibri.ttf",
-        "C:/Windows/Fonts/verdanab.ttf" if bold else "C:/Windows/Fonts/verdana.ttf",
-        "C:/Windows/Fonts/segoeuib.ttf" if bold else "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/ariblk.ttf",
+        # 3. Linux system fonts (GitHub Actions Ubuntu runner)
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
     ]
-    for path in candidates:
+    for font_path in candidates:
         try:
-            return ImageFont.truetype(path, size)
+            return ImageFont.truetype(str(font_path), size)
         except Exception:
             continue
     return ImageFont.load_default()
