@@ -27,7 +27,7 @@ logger = logging.getLogger("trend_finder")
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 REDDIT_SUBS = [
-    "technology", "science", "worldnews", "philosophy",
+    "india", "IndiaTech", "technology", "science", "philosophy",
     "Futurology", "space", "psychology", "history",
     "explainlikeimfive", "todayilearned", "interestingasfuck",
 ]
@@ -35,6 +35,21 @@ REDDIT_SUBS = [
 BAD_KEYWORDS = [
     "porn", "nsfw", "sex", "nude", "leaked", "xxx",
     "killed", "murder", "shooting", "arrested",
+]
+
+POLITICAL_KEYWORDS = [
+    "bjp", "congress", "aap", "tmc", "dmk", "admk", "bsp", "sp", "cpi", "ncp",
+    "modi", "narendra modi", "rahul gandhi", "kejriwal", "shah", "amit shah",
+    "yogi", "mamata", "stalin", "pawar", "sitharaman", "jaishankar", "kharge",
+    "minister", "prime minister", "chief minister", "pm", "cm", "parliament",
+    "lok sabha", "rajya sabha", "assembly", "governor", "president", "mp", "mla",
+    "election", "elections", "poll", "polls", "voting", "voter", "campaign",
+    "party", "government", "govt", "cabinet", "bypoll", "nomination", "politician",
+    "politics", "political", "protest", "rally", "strike", "scam", "corruption",
+    "bribe", "bill", "supreme court", "high court", "verdict", "petition", "fir",
+    "cbi", "ed", "income tax", "sanction", "war", "military", "border", "ceasefire",
+    "jem", "isi", "terrorist", "terrorism", "terror", "spy", "spying", "execute",
+    "executes", "execution", "defense", "missile", "airstrike", "conflict", "geopolitics",
 ]
 
 # Topic patterns that make bad YouTube Shorts
@@ -79,8 +94,21 @@ def _is_suitable(title: str) -> bool:
     if not title or len(title) < 12:
         return False
     t = title.lower()
+
+    # Reject adult / NSFW / violence
     if any(b in t for b in BAD_KEYWORDS):
         return False
+
+    # Reject all political terms, figures, parties, elections, and government news
+    words = set(re.findall(r"\w+", t))
+    for pol in POLITICAL_KEYWORDS:
+        if " " in pol:
+            if pol in t:
+                return False
+        else:
+            if pol in words:
+                return False
+
     if len(title.split()) < 4:   # need at least 4 words
         return False
     for pat in BAD_PATTERNS:
