@@ -393,6 +393,10 @@ def create_video(
 
     audio_clip = AudioFileClip(str(audio_path))
     duration   = audio_clip.duration
+    if duration > 58.0:
+        logger.warning("Audio duration (%.2f s) exceeds YouTube Shorts 60s limit! Trimming to 58.0 s.", duration)
+        audio_clip = audio_clip.subclipped(0, 58.0)
+        duration   = 58.0
     logger.info("Audio duration: %.2f s", duration)
 
     caption_chunks = _group_captions(word_timings or [], words_per_chunk=5)

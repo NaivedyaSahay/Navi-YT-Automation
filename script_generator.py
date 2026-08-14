@@ -34,17 +34,17 @@ SYSTEM_PROMPT = textwrap.dedent("""\
     no extra text — that matches this exact schema:
 
     {
-      "script":      "<voiceover text, between 150 and 250 words, designed for a 45-60 second Short>",
-      "title":       "<YouTube video title, strictly under 100 characters>",
+      "script":      "<voiceover text, between 100 and 130 words, designed for a 40-50 second Short>",
+      "title":       "<YouTube video title, strictly under 90 characters>",
       "description": "<YouTube description, under 500 characters, include a call-to-action>",
       "tags":        ["<tag1>", "<tag2>", "...", "<up to 15 tags>"],
       "keywords":    ["<2-4 single-word stock-footage search terms related to the topic>"]
     }
 
     Rules:
-    - The script MUST be 150-250 words. This is critical — do not write less than 150 words.
-    - Structure the script with: a hook (first 2 sentences), 3-4 key points, and a call-to-action ending.
-    - Write in a conversational, energetic tone suitable for voiceover.
+    - The script MUST be between 100 and 130 words. This is critical — do NOT exceed 135 words so the video stays strictly under 50 seconds.
+    - Structure the script with: a hook (first sentence), 2-3 concise key points, and a fast call-to-action ending.
+    - Write in a conversational, energetic tone suitable for fast voiceover.
     - Tags must be relevant and improve discoverability.
     - keywords are used to fetch background footage - keep them concrete and visual
       (e.g. "ocean", "city", "forest", "technology").
@@ -131,11 +131,26 @@ def generate_script(topic: str) -> dict:
 
     result = _parse_response(raw_text)
 
-    # Enforce length limits
-    result["script"] = " ".join(result["script"].split()[:300])
-    result["title"] = result["title"][:100]
-    result["description"] = result["description"][:500]
+    # Enforce strict length limits for YouTube Shorts (under 50 seconds)
+    words = result["script"].split()
+    if len(words) > 135:
+        result["script"] = " ".join(words[:135])
+
+    # Ensure #Shorts tag in title and description
+    title = result["title"].strip()
+    if "#shorts" not in title.lower():
+        title = f"{title[:90].strip()} #Shorts"
+    result["title"] = title[:100]
+
+    desc = result["description"].strip()
+    if "#shorts" not in desc.lower():
+        desc = f"{desc[:480].strip()} #Shorts"
+    result["description"] = desc[:500]
+
     result["tags"] = result.get("tags", [])[:15]
+    if "Shorts" not in result["tags"] and "shorts" not in result["tags"]:
+        result["tags"].insert(0, "Shorts")
+
     result.setdefault("keywords", ["nature"])
 
     logger.info("Script generated: '%s'", result["title"])
