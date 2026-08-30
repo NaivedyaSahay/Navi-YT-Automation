@@ -31,8 +31,10 @@ PIXABAY_API_KEY: str = os.getenv("PIXABAY_API_KEY", "")      # optional
 TREND_REGION: str = os.getenv("TREND_REGION", "IN")   # ISO country code
 TREND_N: int      = int(os.getenv("TREND_N", "5"))     # candidates to fetch
 
-# ── Gemini model ──────────────────────────────────────────────────────────────
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+# ── AI Model Settings ────────────────────────────────────────────────────────
+# groq/compound is the current primary model (llama-3.3-70b-versatile is retired)
+GROQ_MODEL: str   = os.getenv("GROQ_MODEL", "groq/compound")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 # ── TTS Voice ─────────────────────────────────────────────────────────────────
 TTS_VOICE: str = os.getenv("TTS_VOICE", "en-US-ChristopherNeural")
@@ -63,15 +65,42 @@ YOUTUBE_SCOPES: list = ["https://www.googleapis.com/auth/youtube.upload"]
 DEFAULT_PRIVACY_STATUS: str = os.getenv("DEFAULT_PRIVACY_STATUS", "unlisted")  # "public" | "unlisted" | "private"
 DEFAULT_CATEGORY_ID: str = os.getenv("DEFAULT_CATEGORY_ID", "22")              # 22 = People & Blogs
 
+# ── Multi-Platform Settings ───────────────────────────────────────────────────
+ENABLED_PLATFORMS: list = [
+    p.strip().lower() for p in os.getenv("ENABLED_PLATFORMS", "youtube,pinterest,facebook,instagram,x,threads").split(",") if p.strip()
+]
+
+# Meta (Facebook & Instagram)
+FB_PAGE_ID: str = os.getenv("FB_PAGE_ID", "")
+FB_PAGE_ACCESS_TOKEN: str = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
+IG_USER_ID: str = os.getenv("IG_USER_ID", "")
+IG_ACCESS_TOKEN: str = os.getenv("IG_ACCESS_TOKEN", os.getenv("FB_PAGE_ACCESS_TOKEN", ""))
+
+# Threads
+THREADS_USER_ID: str = os.getenv("THREADS_USER_ID", "")
+THREADS_ACCESS_TOKEN: str = os.getenv("THREADS_ACCESS_TOKEN", "")
+
+# X (Twitter)
+TWITTER_API_KEY: str = os.getenv("TWITTER_API_KEY", "")
+TWITTER_API_SECRET: str = os.getenv("TWITTER_API_SECRET", "")
+TWITTER_ACCESS_TOKEN: str = os.getenv("TWITTER_ACCESS_TOKEN", "")
+TWITTER_ACCESS_TOKEN_SECRET: str = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "")
+TWITTER_BEARER_TOKEN: str = os.getenv("TWITTER_BEARER_TOKEN", "")
+
+# Pinterest
+PINTEREST_ACCESS_TOKEN: str = os.getenv("PINTEREST_ACCESS_TOKEN", "")
+PINTEREST_BOARD_ID: str = os.getenv("PINTEREST_BOARD_ID", "")
+
 # ── Validation helper ──────────────────────────────────────────────────────────
 
 def validate() -> None:
     """Warn about missing critical environment variables without crashing."""
     if not GROQ_API_KEY and not GEMINI_API_KEY:
-        logger.warning("Neither GROQ_API_KEY nor GEMINI_API_KEY is set — script generation may fail.")
+        logger.warning("Neither GROQ_API_KEY nor GEMINI_API_KEY is set — script/quote generation may fail.")
     if not PEXELS_API_KEY and not PIXABAY_API_KEY:
         logger.warning(
             "Neither PEXELS_API_KEY nor PIXABAY_API_KEY is set – "
             "the video editor will use a generated colour background instead of stock footage."
         )
-    logger.info("Configuration loaded successfully.")
+    logger.info("Configuration loaded successfully. Active platforms: %s", ", ".join(ENABLED_PLATFORMS))
+
