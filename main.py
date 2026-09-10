@@ -1,46 +1,49 @@
 """
 main.py
 -------
-Entry point for the YouTube Shorts automation pipeline.
+Entry point for the Multi-Platform Auto-Publisher Pipeline:
+- Video Generation (Shorts/Reels) → Published to YouTube, Pinterest, Facebook, Instagram.
+- Pure Text Motivational Quotes → Published to X (Twitter) and Threads.
 
 Usage:
-    python main.py "your video topic here"          # manual topic
-    python main.py --auto                            # auto-discover trending topic + upload
-    python main.py --auto --no-upload               # auto-discover + generate only
-    python main.py "AI breakthroughs" --privacy public
-    python main.py --topic "Python tips" --voice en-US-JennyNeural
+    python main.py "your video topic here"                                # manual topic
+    python main.py --auto                                                 # auto-discover topic + multi-platform post
+    python main.py --auto --platforms youtube,instagram,threads           # selected platforms
+    python main.py --mode quote --quote-category philosophers             # quote posts only
+    python main.py --mode video --auto                                    # video posts only
 """
 
 from __future__ import annotations
 
 import argparse
-import io
 import logging
 import sys
 import time
+from pathlib import Path
 
 # Force UTF-8 output on Windows so box-drawing / emoji don't crash
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-from pathlib import Path
 
 import config
+import metadata_adapter
+import quote_generator
 import script_generator
-import voice_generator
-import video_editor
-import uploader
 import trend_finder
+from uploaders.multi_publisher import MultiPublisher
+import video_editor
+import voice_generator
 
 # ── Logger ────────────────────────────────────────────────────────────────────
 logger = logging.getLogger("main")
 
 BANNER = """
-+======================================================+
-|   [*]  Navi-Automation  YouTube Shorts Bot           |
-|        Gemini - EdgeTTS - MoviePy - YouTube API      |
-+======================================================+
++==============================================================+
+|   [*] Navi-Automation Multi-Platform Content Engine          |
+|       YouTube | Pinterest | Facebook | Instagram | X | Threads|
++==============================================================+
 """
 
 
@@ -51,7 +54,7 @@ BANNER = """
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="main.py",
-        description="Fully automated YouTube Shorts generator and uploader.",
+        description="Multi-Platform Video & Pure Text Quote Auto-Publisher.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -69,20 +72,39 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Alternative way to pass the topic.",
     )
     parser.add_argument(
+        "--mode",
+        choices=["all", "video", "quote"],
+        default="all",
+        help="Execution mode: 'all' (video + quote), 'video' only, or 'quote' only.",
+    )
+    parser.add_argument(
+        "--platforms",
+        default=None,
+        help="Comma-separated list of target platforms (e.g. 'youtube,pinterest,facebook,instagram,x,threads' or 'all').",
+    )
+    parser.add_argument(
+        "--quote-category",
+        "--category",
+        dest="quote_category",
+        choices=quote_generator.CATEGORIES + ["random"],
+        default="random",
+        help="Quote source category (philosophers, movies, series, books, cartoons, anime, personalities, ai).",
+    )
+    parser.add_argument(
         "--no-upload",
         action="store_true",
-        help="Skip the YouTube upload step (generate video only).",
+        help="Skip the social upload step (generate assets locally only).",
     )
     parser.add_argument(
         "--privacy",
         choices=["public", "unlisted", "private"],
         default=None,
-        help="YouTube video privacy status (default: from .env or 'unlisted').",
+        help="YouTube video privacy status.",
     )
     parser.add_argument(
         "--voice",
         default=None,
-        help="Edge TTS voice name (default: from .env or 'en-US-ChristopherNeural').",
+        help="Edge TTS voice name.",
     )
     parser.add_argument(
         "--output-dir",
@@ -92,12 +114,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--keep-files",
         action="store_true",
-        help="Do not delete intermediate files (audio, background) after export.",
+        help="Do not delete intermediate files after export.",
     )
     parser.add_argument(
         "--auto",
         action="store_true",
-        help="Auto-discover trending topic from Google Trends + Reddit and generate a video.",
+        help="Auto-discover trending topic from Google Trends + Reddit.",
     )
     parser.add_argument(
         "--region",
@@ -115,128 +137,140 @@ def _build_parser() -> argparse.ArgumentParser:
 def _step(n: int, label: str) -> None:
     logger.info("")
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    logger.info("  STEP %d / 4 — %s", n, label)
+    logger.info("  STEP %d — %s", n, label)
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 
 def run_pipeline(
-    topic: str,
+    topic: str | None = None,
+    mode: str = "all",
+    platforms_arg: str | None = None,
+    quote_category: str = "random",
     no_upload: bool = False,
     privacy: str | None = None,
     voice: str | None = None,
     output_dir: str | None = None,
     keep_files: bool = False,
 ) -> None:
-    """Execute the full generation → upload pipeline."""
+    """Execute the multi-platform video & quote generation + distribution pipeline."""
 
     print(BANNER)
     start_time = time.time()
 
-    # ── Override output dir if requested ──────────────────────────────────────
     if output_dir:
-        import config as _cfg
-        _cfg.OUTPUT_DIR = Path(output_dir)
-        _cfg.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        _cfg.AUDIO_FILE = _cfg.OUTPUT_DIR / "voiceover.mp3"
-        _cfg.VIDEO_FILE = _cfg.OUTPUT_DIR / "final_video.mp4"
-        _cfg.BG_VIDEO_FILE = _cfg.OUTPUT_DIR / "background.mp4"
+        config.OUTPUT_DIR = Path(output_dir)
+        config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        config.AUDIO_FILE = config.OUTPUT_DIR / "voiceover.mp3"
+        config.VIDEO_FILE = config.OUTPUT_DIR / "final_video.mp4"
+        config.BG_VIDEO_FILE = config.OUTPUT_DIR / "background.mp4"
 
-    # ── Validate config ───────────────────────────────────────────────────────
     try:
         config.validate()
     except EnvironmentError as exc:
         logger.error("Configuration error: %s", exc)
         sys.exit(1)
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 1 — Generate script
-    # ─────────────────────────────────────────────────────────────────────────
-    _step(1, "Generating Script")
-    try:
-        script_data = script_generator.generate_script(topic)
-    except Exception as exc:
-        logger.error("Script generation failed: %s", exc)
-        sys.exit(1)
+    # ── Parse target platforms ────────────────────────────────────────────────
+    if platforms_arg and platforms_arg.strip().lower() != "all":
+        target_platforms = [p.strip().lower() for p in platforms_arg.split(",") if p.strip()]
+    else:
+        target_platforms = config.ENABLED_PLATFORMS
 
-    print("\n📝 Generated Script:")
-    print(f"   Title      : {script_data['title']}")
-    print(f"   Script     : {script_data['script'][:120]}…")
-    print(f"   Tags       : {', '.join(script_data['tags'][:5])} …")
-    print(f"   Keywords   : {', '.join(script_data.get('keywords', []))}")
-    print()
+    video_path: Path | None = None
+    script_data: dict | None = None
+    quote_data: dict | None = None
+
+    step_count = 1
 
     # ─────────────────────────────────────────────────────────────────────────
-    # STEP 2 — Generate voiceover
+    # STEP: Generate Video (YouTube, Pinterest, Facebook, Instagram)
     # ─────────────────────────────────────────────────────────────────────────
-    _step(2, "Generating Voiceover")
-    try:
-        audio_path, word_timings = voice_generator.generate_voiceover(
-            text=script_data["script"],
-            voice=voice,
-        )
-    except Exception as exc:
-        logger.error("Voiceover generation failed: %s", exc)
-        sys.exit(1)
+    if mode in ("all", "video"):
+        if not topic:
+            topic = "Mind-blowing facts about life"
 
-    print(f"🎙️  Voiceover saved to: {audio_path}")
-    print()
+        _step(step_count, "Generating Video Script")
+        step_count += 1
+        try:
+            script_data = script_generator.generate_script(topic)
+        except Exception as exc:
+            logger.error("Script generation failed: %s", exc)
+            sys.exit(1)
+
+        print("\n📝 Generated Video Script:")
+        print(f"   Title      : {script_data['title']}")
+        print(f"   Script     : {script_data['script'][:120]}…")
+        print(f"   Keywords   : {', '.join(script_data.get('keywords', []))}\n")
+
+        _step(step_count, "Generating Voiceover")
+        step_count += 1
+        try:
+            audio_path, word_timings = voice_generator.generate_voiceover(
+                text=script_data["script"],
+                voice=voice,
+            )
+        except Exception as exc:
+            logger.error("Voiceover generation failed: %s", exc)
+            sys.exit(1)
+
+        _step(step_count, "Building Vertical Video (9:16)")
+        step_count += 1
+        try:
+            video_path = video_editor.create_video(
+                audio_path=audio_path,
+                keywords=script_data.get("keywords", ["nature"]),
+                word_timings=word_timings,
+                script_text=script_data.get("script", ""),
+            )
+        except Exception as exc:
+            logger.error("Video creation failed: %s", exc)
+            sys.exit(1)
+
+        print(f"🎬 Video rendered successfully at: {video_path}\n")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # STEP 3 — Build video
+    # STEP: Generate Pure Text Motivational Quote (X & Threads)
     # ─────────────────────────────────────────────────────────────────────────
-    _step(3, "Building Video")
-    try:
-        video_path = video_editor.create_video(
-            audio_path=audio_path,
-            keywords=script_data.get("keywords", ["nature"]),
-            word_timings=word_timings,
-            script_text=script_data.get("script", ""),
-        )
-    except Exception as exc:
-        logger.error("Video creation failed: %s", exc)
-        sys.exit(1)
+    if mode in ("all", "quote"):
+        _step(step_count, "Generating Pure Text Motivational Quote")
+        step_count += 1
+        quote_cat = None if quote_category == "random" else quote_category
+        quote_data = quote_generator.generate_quote(category=quote_cat)
 
-    print(f"🎬  Video saved to: {video_path}")
-    print()
+        print("\n💬 Generated Motivational Quote:")
+        print(f"   Category : {quote_data['category'].capitalize()}")
+        print(f"   Author   : {quote_data['author']}")
+        print(f"   Quote    : “{quote_data['quote']}”")
+        print("\n   [X Post]       : " + quote_data['formatted_x_post'].replace('\n', ' '))
+        print("   [Threads Post] : " + quote_data['formatted_threads_post'].replace('\n', ' ') + "\n")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # STEP 4 — Upload to YouTube (optional)
+    # STEP: Multi-Platform Publishing
     # ─────────────────────────────────────────────────────────────────────────
     if no_upload:
-        logger.info("Skipping upload (--no-upload flag is set).")
-        print("⏭️  Upload skipped. Your video is ready locally.")
+        logger.info("Skipping social publishing (--no-upload set).")
+        print("⏭️  Publishing skipped. Generated content is ready locally.")
     else:
-        _step(4, "Uploading to YouTube")
-        try:
-            video_id = uploader.upload_video(
-                video_path=video_path,
-                title=script_data["title"],
-                description=script_data["description"],
-                tags=script_data["tags"],
-                privacy_status=privacy,
-            )
-            print(f"\n✅ Uploaded! Watch at: https://www.youtube.com/watch?v={video_id}")
-        except FileNotFoundError as exc:
-            logger.error("OAuth setup error: %s", exc)
-            print("\n⚠️  Upload skipped – client_secrets.json not found.")
-            print("    See README.md → 'YouTube OAuth Setup' for instructions.")
-        except Exception as exc:
-            logger.error("Upload failed: %s", exc)
-            print(f"\n❌ Upload failed: {exc}")
+        _step(step_count, "Multi-Platform Social Distribution")
+        publisher = MultiPublisher()
+        publisher.publish(
+            video_path=video_path,
+            video_meta=script_data,
+            quote_data=quote_data,
+            platforms=target_platforms,
+        )
 
-    # ── Clean up intermediate files ───────────────────────────────────────────
+    # ── Cleanup ───────────────────────────────────────────────────────────────
     if not keep_files:
         for path in [config.AUDIO_FILE, config.BG_VIDEO_FILE]:
             try:
                 if Path(path).exists():
                     Path(path).unlink()
-                    logger.debug("Removed intermediate file: %s", path)
             except Exception:
                 pass
 
     elapsed = time.time() - start_time
     print(f"\n⏱️  Pipeline completed in {elapsed:.1f} seconds.")
-    logger.info("Pipeline finished in %.1f s.", elapsed)
 
 
 HISTORY_FILE = Path("posted_topics.json")
@@ -253,7 +287,7 @@ def _load_history() -> list[str]:
 def _save_history(topic: str) -> None:
     history = _load_history()
     history.append(topic)
-    history = history[-100:]  # Keep last 100
+    history = history[-100:]
     try:
         import json
         HISTORY_FILE.write_text(json.dumps(history, indent=2), encoding="utf-8")
@@ -262,7 +296,6 @@ def _save_history(topic: str) -> None:
 
 
 def _discover_topic(region: str) -> str:
-    """Fetch trending topics and return a fresh, unposted topic."""
     print("\n🔍 Discovering trending topics…\n")
     try:
         topics = trend_finder.get_trending_topics(n=config.TREND_N, region=region)
@@ -271,52 +304,41 @@ def _discover_topic(region: str) -> str:
         sys.exit(1)
 
     if not topics:
-        logger.error("No trending topics found. Try again later or provide a topic manually.")
+        logger.error("No trending topics found.")
         sys.exit(1)
-
-    print("🔥 Trending Topics Found:")
-    print("  " + "-" * 50)
-    for i, t in enumerate(topics, 1):
-        print(f"  {i}. {t['topic']}")
-        print(f"     └─ Source: {t['source']}")
-    print("  " + "-" * 50)
 
     import random
     history = set(t.lower() for t in _load_history())
     fresh_topics = [t for t in topics if t["topic"].lower() not in history]
-
     if not fresh_topics:
-        logger.info("All top trending topics were recently used. Selecting a random topic for variety.")
         fresh_topics = topics
 
     chosen = random.choice(fresh_topics)
     _save_history(chosen["topic"])
 
-    print(f"\n✅ Auto-selected fresh topic: \"{chosen['topic']}\" [{chosen['source']}]\n")
+    print(f"✅ Auto-selected topic: \"{chosen['topic']}\" [{chosen['source']}]\n")
     return chosen["topic"]
 
-
-# ───────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ───────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = _build_parser()
     args   = parser.parse_args()
     region = args.region or config.TREND_REGION
 
-    # ─ Determine topic ─────────────────────────────────────────────────
-    if args.auto:
-        topic = _discover_topic(region)
-    else:
-        topic = args.topic or args.topic_flag
-        if not topic:
-            topic = input("🎯 Enter the video topic: ").strip()
-        if not topic:
-            parser.error("Provide a topic or use --auto to discover one automatically.")
+    topic = None
+    if args.mode in ("all", "video"):
+        if args.auto:
+            topic = _discover_topic(region)
+        else:
+            topic = args.topic or args.topic_flag
+            if not topic:
+                topic = input("🎯 Enter the video topic: ").strip()
 
     run_pipeline(
         topic=topic,
+        mode=args.mode,
+        platforms_arg=args.platforms,
+        quote_category=args.quote_category,
         no_upload=args.no_upload,
         privacy=args.privacy,
         voice=args.voice,
