@@ -1,12 +1,14 @@
 """
 config.py
 ---------
-Centralised configuration loader for the YouTube automation pipeline.
+Centralised configuration loader for the YouTube Shorts automation pipeline.
 Reads all settings from a .env file and exposes them as typed constants.
 """
 
-import os
+from __future__ import annotations
+
 import logging
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -22,85 +24,94 @@ logging.basicConfig(
 logger = logging.getLogger("config")
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
-GEMINI_API_KEY: str  = os.getenv("GEMINI_API_KEY", "")
-GROQ_API_KEY: str    = os.getenv("GROQ_API_KEY", "")
-PEXELS_API_KEY: str  = os.getenv("PEXELS_API_KEY", "")       # optional
-PIXABAY_API_KEY: str = os.getenv("PIXABAY_API_KEY", "")      # optional
+GROQ_API_KEY: str     = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY: str   = os.getenv("GEMINI_API_KEY", "")
+HF_TOKEN: str         = os.getenv("HF_TOKEN", "")
+HF_IMAGE_MODEL: str   = os.getenv("HF_IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell")
+LOCAL_MYTHOLOGY_SCENES_DIR: Path = Path(__file__).parent / "assets" / "mythology_scenes"
+PEXELS_API_KEY: str   = os.getenv("PEXELS_API_KEY", "")       # optional
+PIXABAY_API_KEY: str  = os.getenv("PIXABAY_API_KEY", "")      # optional
 
-# ── Trend settings ────────────────────────────────────────────────────────────
-TREND_REGION: str = os.getenv("TREND_REGION", "IN")   # ISO country code
-TREND_N: int      = int(os.getenv("TREND_N", "5"))     # candidates to fetch
-
-# ── AI Model Settings ────────────────────────────────────────────────────────
-# groq/compound is the current primary model (llama-3.3-70b-versatile is retired)
+# ── AI Model Settings ─────────────────────────────────────────────────────────
 GROQ_MODEL: str   = os.getenv("GROQ_MODEL", "groq/compound")
-GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-# ── TTS Voice ─────────────────────────────────────────────────────────────────
-TTS_VOICE: str = os.getenv("TTS_VOICE", "en-US-ChristopherNeural")
-TTS_RATE: str = os.getenv("TTS_RATE", "+0%")   # e.g. "+10%" to speed up
+# ── TTS Voice Provider Settings ───────────────────────────────────────────────
+TTS_PROVIDER: str   = os.getenv("TTS_PROVIDER", "edge-tts")   # "edge-tts" (exact subtitle sync) or "sarvam"
+SARVAM_API_KEY: str = os.getenv("SARVAM_API_KEY", "")
+SARVAM_SPEAKER: str = os.getenv("SARVAM_SPEAKER", "ratan")  # ratan, shubh, aditya, kavya, ritu
+SARVAM_MODEL: str   = os.getenv("SARVAM_MODEL", "bulbul:v3")
+
+# Edge-TTS Settings (Primary - Swara Dramatic Expressive with exact WordBoundary timestamps)
+TTS_VOICE: str  = os.getenv("TTS_VOICE", "hi-IN-SwaraNeural")
+TTS_RATE: str   = os.getenv("TTS_RATE", "+0%")
+TTS_PITCH: str  = os.getenv("TTS_PITCH", "+0Hz")
 TTS_VOLUME: str = os.getenv("TTS_VOLUME", "+0%")
 
-# ── Video settings ────────────────────────────────────────────────────────────
-VIDEO_WIDTH: int = int(os.getenv("VIDEO_WIDTH", "1080"))
+# ── Background Music (BGM) Settings ───────────────────────────────────────────
+BGM_DIR: Path       = Path(__file__).parent / "background_music"
+BGM_DIR.mkdir(parents=True, exist_ok=True)
+BGM_VOLUME: float   = float(os.getenv("BGM_VOLUME", "0.035"))  # 3.5% volume (subtle background bed)
+ENABLE_BGM: bool    = os.getenv("ENABLE_BGM", "true").lower() in ("true", "1", "yes")
+
+# ── Video settings (9:16 Shorts format) ───────────────────────────────────────
+VIDEO_WIDTH: int  = int(os.getenv("VIDEO_WIDTH", "1080"))
 VIDEO_HEIGHT: int = int(os.getenv("VIDEO_HEIGHT", "1920"))
-VIDEO_FPS: int = int(os.getenv("VIDEO_FPS", "30"))
-VIDEO_CODEC: str = os.getenv("VIDEO_CODEC", "libx264")
-AUDIO_CODEC: str = os.getenv("AUDIO_CODEC", "aac")
-VIDEO_BITRATE: str = os.getenv("VIDEO_BITRATE", "4000k")
+VIDEO_FPS: int    = int(os.getenv("VIDEO_FPS", "30"))
+VIDEO_CODEC: str  = os.getenv("VIDEO_CODEC", "libx264")
+AUDIO_CODEC: str  = os.getenv("AUDIO_CODEC", "aac")
+VIDEO_BITRATE: str = os.getenv("VIDEO_BITRATE", "8M")
 BACKGROUND_COLOR: tuple = (18, 18, 30)   # dark fallback background
 
 # ── Output paths ──────────────────────────────────────────────────────────────
 OUTPUT_DIR: Path = Path(os.getenv("OUTPUT_DIR", "output"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-AUDIO_FILE: Path = OUTPUT_DIR / "voiceover.mp3"
-VIDEO_FILE: Path = OUTPUT_DIR / "final_video.mp4"
-BG_VIDEO_FILE: Path = OUTPUT_DIR / "background.mp4"
+AUDIO_FILE: Path     = OUTPUT_DIR / "voiceover.mp3"
+VIDEO_FILE: Path     = OUTPUT_DIR / "final_video.mp4"
+BG_VIDEO_FILE: Path  = OUTPUT_DIR / "background.mp4"
+POSTED_TOPICS_FILE: Path = Path(__file__).parent / "posted_topics.json"
+USE_AI_VISUALS_ONLY: bool = True
+
+# ── Allowed Categories ────────────────────────────────────────────────────────
+ALLOWED_CATEGORIES = [
+    "Mahabharata",
+    "Ramayana",
+    "Lord Shiva",
+    "Bhagavad Gita",
+    "Lord Krishna",
+    "Karna & Dharma",
+    "Hanuman",
+    "Karma & Destiny",
+    "Puranic Legends",
+    "Vedic Wisdom",
+    "Spiritual Life Lessons",
+]
 
 # ── YouTube / OAuth ───────────────────────────────────────────────────────────
 CLIENT_SECRETS_FILE: str = os.getenv("CLIENT_SECRETS_FILE", "client_secrets.json")
 TOKEN_FILE: str = os.getenv("TOKEN_FILE", "token.json")
 YOUTUBE_SCOPES: list = ["https://www.googleapis.com/auth/youtube.upload"]
-DEFAULT_PRIVACY_STATUS: str = os.getenv("DEFAULT_PRIVACY_STATUS", "unlisted")  # "public" | "unlisted" | "private"
-DEFAULT_CATEGORY_ID: str = os.getenv("DEFAULT_CATEGORY_ID", "22")              # 22 = People & Blogs
-
-# ── Multi-Platform Settings ───────────────────────────────────────────────────
-ENABLED_PLATFORMS: list = [
-    p.strip().lower() for p in os.getenv("ENABLED_PLATFORMS", "youtube,pinterest,facebook,instagram,x,threads").split(",") if p.strip()
-]
-
-# Meta (Facebook & Instagram)
-FB_PAGE_ID: str = os.getenv("FB_PAGE_ID", "")
-FB_PAGE_ACCESS_TOKEN: str = os.getenv("FB_PAGE_ACCESS_TOKEN", "")
-IG_USER_ID: str = os.getenv("IG_USER_ID", "")
-IG_ACCESS_TOKEN: str = os.getenv("IG_ACCESS_TOKEN", os.getenv("FB_PAGE_ACCESS_TOKEN", ""))
-
-# Threads
-THREADS_USER_ID: str = os.getenv("THREADS_USER_ID", "")
-THREADS_ACCESS_TOKEN: str = os.getenv("THREADS_ACCESS_TOKEN", "")
-
-# X (Twitter)
-TWITTER_API_KEY: str = os.getenv("TWITTER_API_KEY", "")
-TWITTER_API_SECRET: str = os.getenv("TWITTER_API_SECRET", "")
-TWITTER_ACCESS_TOKEN: str = os.getenv("TWITTER_ACCESS_TOKEN", "")
-TWITTER_ACCESS_TOKEN_SECRET: str = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "")
-TWITTER_BEARER_TOKEN: str = os.getenv("TWITTER_BEARER_TOKEN", "")
-
-# Pinterest
-PINTEREST_ACCESS_TOKEN: str = os.getenv("PINTEREST_ACCESS_TOKEN", "")
-PINTEREST_BOARD_ID: str = os.getenv("PINTEREST_BOARD_ID", "")
+DEFAULT_PRIVACY_STATUS: str = os.getenv("DEFAULT_PRIVACY_STATUS", "public")  # "public" | "unlisted" | "private"
+DEFAULT_CATEGORY_ID: str = os.getenv("DEFAULT_CATEGORY_ID", "22")              # 22 = People & Blogs, 27 = Education
 
 # ── Validation helper ──────────────────────────────────────────────────────────
-
 def validate() -> None:
     """Warn about missing critical environment variables without crashing."""
     if not GROQ_API_KEY and not GEMINI_API_KEY:
-        logger.warning("Neither GROQ_API_KEY nor GEMINI_API_KEY is set — script/quote generation may fail.")
-    if not PEXELS_API_KEY and not PIXABAY_API_KEY:
-        logger.warning(
-            "Neither PEXELS_API_KEY nor PIXABAY_API_KEY is set – "
-            "the video editor will use a generated colour background instead of stock footage."
-        )
-    logger.info("Configuration loaded successfully. Active platforms: %s", ", ".join(ENABLED_PLATFORMS))
+        logger.warning("Neither GROQ_API_KEY nor GEMINI_API_KEY is set — script generation may fail.")
+    if not HF_TOKEN:
+        logger.warning("HF_TOKEN is not set — AI visual generator will fall back to local scene assets.")
+    if not SARVAM_API_KEY:
+        logger.info("SARVAM_API_KEY not set — using Edge-TTS ('%s') as primary voice.", TTS_VOICE)
 
+    secrets_path = Path(__file__).parent / CLIENT_SECRETS_FILE
+    token_path = Path(__file__).parent / TOKEN_FILE
+    if not secrets_path.exists() and not token_path.exists():
+        logger.warning(
+            "Neither %s nor %s found! YouTube uploads will require authentication setup.",
+            CLIENT_SECRETS_FILE,
+            TOKEN_FILE,
+        )
+
+    logger.info("Configuration loaded successfully.")
