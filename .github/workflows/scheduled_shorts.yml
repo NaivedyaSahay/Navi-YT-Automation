@@ -101,31 +101,22 @@ jobs:
           DEFAULT_CATEGORY_ID=22
           EOT
 
-          # ── Write JSON secrets safely via Python ──
-          python -c '
-import os, sys, json
-for env_var, filename in [("CLIENT_SECRETS_JSON", "client_secrets.json"), ("TOKEN_JSON", "token.json")]:
-    raw = os.getenv(env_var, "").strip()
-    if not raw:
-        if env_var == "TOKEN_JSON":
-            print("❌ TOKEN_JSON secret is empty — upload will fail!", file=sys.stderr)
-            sys.exit(1)
-        print(f"⚠️ {env_var} is empty!")
-        continue
-    # Auto-repair common copy-paste defects (e.g. omitted opening brace)
-    if env_var == "TOKEN_JSON":
-        if raw.startswith("\"ya29") or raw.startswith("\"token\"") or not raw.startswith("{"):
-            if raw.startswith("\"token\":"):
-                raw = "{" + raw
-            elif raw.startswith("\"ya29"):
-                raw = "{\"token\": " + raw
-        if not raw.endswith("}"):
-            raw = raw + "}"
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(raw)
-    print(f"✅ {filename} restored successfully")
-'
-          cp token.json token_before.json
+          # ── Write JSON secrets safely ──
+          if [ -n "$CLIENT_SECRETS_JSON" ]; then
+            printf '%s' "$CLIENT_SECRETS_JSON" > client_secrets.json
+            echo "✅ client_secrets.json restored"
+          else
+            echo "⚠️ CLIENT_SECRETS_JSON secret is empty!"
+          fi
+
+          if [ -n "$TOKEN_JSON" ]; then
+            printf '%s' "$TOKEN_JSON" > token.json
+            cp token.json token_before.json
+            echo "✅ token.json restored"
+          else
+            echo "❌ TOKEN_JSON secret is empty — upload will fail!"
+            exit 1
+          fi
 
       - name: Run Shorts Automation Pipeline
         run: |
