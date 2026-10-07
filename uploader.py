@@ -69,11 +69,26 @@ def _get_credentials() -> Credentials:
     # ── Try loading cached token ──────────────────────────────────────────────
     if token_path.exists():
         try:
-            creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+            content = token_path.read_text(encoding="utf-8").strip()
+            # Handle accidental formatting/copy defects (e.g. missing opening curly brace or leading token key)
+            if content.startswith('"ya29') or content.startswith('"token"') or not content.startswith('{'):
+                if content.startswith('"token":'):
+                    content = '{' + content
+                elif content.startswith('"ya29'):
+                    content = '{"token": ' + content
+            if not content.endswith('}'):
+                content = content + '}'
+            import json
+            data = json.loads(content)
+            creds = Credentials.from_authorized_user_info(data, scopes)
             logger.info("Loaded cached OAuth token from: %s", token_path)
-        except Exception as exc:
-            logger.warning("Could not load cached token (%s) – will re-authenticate.", exc)
-            creds = None
+        except Exception:
+            try:
+                creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+                logger.info("Loaded cached OAuth token from: %s", token_path)
+            except Exception as exc:
+                logger.warning("Could not load cached token (%s) – will re-authenticate.", exc)
+                creds = None
 
     # ── Refresh expired token ─────────────────────────────────────────────────
     if creds and creds.expired and creds.refresh_token:
