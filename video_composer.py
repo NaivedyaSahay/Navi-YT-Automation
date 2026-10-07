@@ -98,7 +98,7 @@ def _group_words_into_caption_chunks(
         is_break_punct = bool(w and w[-1] in (".", "?", "!", ",", ";", ":", "-", "।"))
         if len(current_words) >= words_per_chunk or is_break_punct:
             cleaned_phrase = " ".join(
-                re.sub(r"[.,?!:;—–-।]", "", str(x.get("word", ""))).strip()
+                re.sub(r"[.,?!:;—–।\-]", "", str(x.get("word", ""))).strip()
                 for x in current_words
             ).strip()
             if cleaned_phrase:
@@ -111,7 +111,7 @@ def _group_words_into_caption_chunks(
 
     if current_words:
         cleaned_phrase = " ".join(
-            re.sub(r"[.,?!:;—–-।]", "", str(x.get("word", ""))).strip()
+            re.sub(r"[.,?!:;—–।\-]", "", str(x.get("word", ""))).strip()
             for x in current_words
         ).strip()
         if cleaned_phrase:

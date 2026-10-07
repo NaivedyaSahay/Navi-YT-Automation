@@ -118,8 +118,31 @@ def _fetch_ai_mythological_scenes(image_prompts: List[str], count: int = 5) -> L
         except Exception as hf_err:
             logger.warning("Hugging Face client error: %s", hf_err)
 
-    # 2. Free Pollinations FLUX endpoint fallback
-    # 2. Local AI Mythology Scenes fallback pool if network fails
+    # 2. Free Pollinations FLUX endpoint fallback if Hugging Face credits are depleted
+    if len(saved) < 2:
+        logger.info("Attempting free Pollinations FLUX fallback for AI mythological scenes...")
+        import urllib.request
+        import urllib.parse
+        for i, p in enumerate(prompts):
+            if len(saved) >= count:
+                break
+            dest = config.OUTPUT_DIR / f"ai_scene_{i}.jpg"
+            if dest in saved and dest.exists():
+                continue
+            try:
+                poll_prompt = f"{p}, Indian mythological cinematic still, volumetric lighting, 8k, vertical 9:16"
+                url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(poll_prompt)}?width=768&height=1344&model=flux&nologo=true"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    img_data = resp.read()
+                    if len(img_data) > 5000:
+                        dest.write_bytes(img_data)
+                        saved.append(dest)
+                        logger.info("🎨 Successfully generated scene via Pollinations FLUX: %s", dest.name)
+            except Exception as poll_err:
+                logger.warning("Pollinations fallback for scene #%d failed: %s", i + 1, poll_err)
+
+    # 3. Local AI Mythology Scenes fallback pool if network fails
     if len(saved) < 2:
         logger.info("Checking local AI mythology scenes pool from %s...", config.LOCAL_MYTHOLOGY_SCENES_DIR)
         fallback_scenes = _get_fallback_mythology_scenes()
